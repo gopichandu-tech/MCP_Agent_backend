@@ -5,7 +5,7 @@ from anyquery_client import run_sql
 import os
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(override=True)
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
@@ -100,6 +100,30 @@ def _extract_rows_columns(parsed):
     return rows, columns
 
 
+def generate_natural_language_response(question, sql_query, data, rows_count):
+    if rows_count == 0:
+        return "No data found for your query."
+
+    # Convert a few rows to string for context (limit to 10 rows to keep prompt size reasonable)
+    data_sample = data[:10]
+    
+    prompt = f"""
+    You are a helpful data assistant. 
+    The user asked a question, and we queried our PostgreSQL database to get the answer. 
+    
+    User Question: {question}
+    SQL Query Executed: {sql_query}
+    Total Rows Returned: {rows_count}
+    Sample Data (up to 10 rows):
+    {json.dumps(data_sample, indent=2)}
+    
+    Based on the question and the data, provide a clear, concise, and natural language answer directly answering the user's question. 
+    Do not explain the SQL query unless necessary. Just give the answer in a friendly tone.
+    """
+    
+    response = llm.invoke(prompt)
+    return response.content.strip()
+
 def run_agent(question):
     print("Question:", question)
 
@@ -116,7 +140,8 @@ def run_agent(question):
             "sql_query": sql_query,
             "rows_count": 0,
             "data": [],
-            "message": str(parsed["error"])
+            "message": str(parsed["error"]),
+            "natural_language_response": f"I encountered an error executing the query: {parsed['error']}"
         }
 
     rows, columns = _extract_rows_columns(parsed)
@@ -128,7 +153,8 @@ def run_agent(question):
             "sql_query": sql_query,
             "rows_count": 0,
             "data": [],
-            "message": columns  # show raw text to user
+            "message": columns,
+            "natural_language_response": f"Here is the raw response from the database: {columns}"
         }
 
 
@@ -138,7 +164,8 @@ def run_agent(question):
             "sql_query": sql_query,
             "rows_count": 0,
             "data": [],
-            "message": "No users found"
+            "message": "No users found",
+            "natural_language_response": "I couldn't find any data matching your request."
         }
 
     # 🔥 Convert rows → objects
@@ -146,13 +173,16 @@ def run_agent(question):
         dict(zip(columns, row))
         for row in rows
     ]
+    
+    nl_response = generate_natural_language_response(question, sql_query, formatted_rows, len(formatted_rows))
 
     return {
         "question": question,
         "sql_query": sql_query,
         "rows_count": len(formatted_rows),
         "data": formatted_rows,
-        "message": "Success"
+        "message": "Success",
+        "natural_language_response": nl_response
     }
 
 # def run_agent(question):

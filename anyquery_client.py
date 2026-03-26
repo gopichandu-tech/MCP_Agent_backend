@@ -6,9 +6,6 @@ import time
 import os
 from dotenv import load_dotenv
 
-load_dotenv()
-ANYQUERY_TOKEN = os.getenv("ANYQUERY_TOKEN")
-
 SSE_URL = "http://127.0.0.1:8070/sse"
 
 
@@ -21,9 +18,13 @@ def run_sql(query):
     """
 
     print(f"\n[DEBUG] Query: {query}")
+    
+    # Load dynamic token on every single query to bypass uvicorn caching
+    load_dotenv(override=True)
+    current_token = os.getenv("ANYQUERY_TOKEN")
 
     headers = {
-        "Authorization": f"Bearer {ANYQUERY_TOKEN}",
+        "Authorization": f"Bearer {current_token}",
         "Content-Type": "application/json",
         "Accept": "text/event-stream",
     }
@@ -112,7 +113,7 @@ def run_sql(query):
     }
 
     post_headers = {
-        "Authorization": f"Bearer {ANYQUERY_TOKEN}",
+        "Authorization": f"Bearer {current_token}",
         "Content-Type": "application/json",
     }
 
